@@ -1,0 +1,182 @@
+<UserControl x:Class="WebViewHub.Controls.WebViewContainer"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:WebViewHub.Controls"
+             x:Name="Root">
+    <UserControl.Resources>
+        <!-- 透明的 Thumb 样式，用于原生捕获并不遮挡底层事件 -->
+        <Style x:Key="InvisibleThumbStyle" TargetType="Thumb">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="{TemplateBinding Background}"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <!-- 主体带阴影 -->
+        <Border x:Name="OuterBorder"
+                Background="#ffffff"
+                BorderBrush="#e5e5e7"
+                BorderThickness="1"
+                CornerRadius="8">
+            <Border.Effect>
+                <DropShadowEffect Color="#000000" Opacity="0.08" BlurRadius="12" ShadowDepth="0"/>
+            </Border.Effect>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="20"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 顶栏区域：由于 WebView2 Win32 空域问题，UI 不能与其重叠，必须独立占据上方空间 -->
+                <Grid Grid.Row="0" Background="Transparent">
+                    <Border CornerRadius="8,8,0,0" Background="#f8f8f8" />
+                    
+                    <!-- 拖拽热区 -->
+                    <Thumb x:Name="DragThumb"
+                           Style="{StaticResource InvisibleThumbStyle}"
+                           Cursor="SizeAll"
+                           Background="Transparent"
+                           DragDelta="DragThumb_DragDelta"/>
+                    
+                    <!-- 按钮停靠区 -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0">
+                        <!-- 配置角色标签按钮 -->
+                        <Button x:Name="EditRoleButton"
+                                Content="🏷️"
+                                Click="EditRole_Click"
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,6,0"
+                                FontSize="9"
+                                FontWeight="Bold"
+                                Background="#bfbfbf"
+                                Foreground="#ffffff"
+                                BorderThickness="0"
+                                Cursor="Hand"
+                                Padding="0"
+                                ToolTip="配置角色(RoleTag)">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}" CornerRadius="7">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#999999"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <!-- 手机版/桌面版切换按钮 -->
+                        <Button x:Name="ToggleMobileButton"
+                                Content="📱"
+                                Click="ToggleMobile_Click"
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,6,0"
+                                FontSize="9"
+                                Background="#bfbfbf"
+                                Foreground="#ffffff"
+                                BorderThickness="0"
+                                Cursor="Hand"
+                                Padding="0"
+                                ToolTip="切换手机版/桌面版">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}" CornerRadius="7">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#999999"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <!-- 配置当前 URL 按钮 -->
+                        <Button x:Name="EditUrlButton"
+                                Content="✎"
+                                Click="EditUrl_Click"
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,6,0"
+                                FontSize="10"
+                                FontWeight="Bold"
+                                Background="#bfbfbf"
+                                Foreground="#ffffff"
+                                BorderThickness="0"
+                                Cursor="Hand"
+                                Padding="0"
+                                ToolTip="配置网页地址">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}" CornerRadius="7">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#999999"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <!-- 关闭按钮 -->
+                        <Button x:Name="DeleteButton"
+                                Content="×"
+                                Click="Delete_Click"
+                                Width="14"
+                                Height="14"
+                                FontSize="11"
+                                FontWeight="Bold"
+                                Background="#ff3b30"
+                                Foreground="#ffffff"
+                                BorderThickness="0"
+                                Cursor="Hand"
+                                Padding="0"
+                                ToolTip="删除此窗口">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}" CornerRadius="7">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#d63030"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <!-- WebView 内容：独立在 Row=1 渲染，不再产生重叠 -->
+                <Border Grid.Row="1" Background="#ffffff" CornerRadius="0,0,8,8" ClipToBounds="True">
+                    <local:WebViewUnit x:Name="WebView"
+                                       ProfileID="{Binding ProfileID, ElementName=Root}"/>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- 调整大小的边角 Thumb -->
+        <!-- 右边缘 -->
+        <Thumb Width="6" HorizontalAlignment="Right" Cursor="SizeWE" DragDelta="ResizeRight_DragDelta" Style="{StaticResource InvisibleThumbStyle}" Margin="0,28,0,8"/>
+        <!-- 下边缘 -->
+        <Thumb Height="6" VerticalAlignment="Bottom" Cursor="SizeNS" DragDelta="ResizeBottom_DragDelta" Style="{StaticResource InvisibleThumbStyle}" Margin="0,0,8,0"/>
+        <!-- 右下角 -->
+        <Thumb Width="12" Height="12" HorizontalAlignment="Right" VerticalAlignment="Bottom" Cursor="SizeNWSE" DragDelta="ResizeBottomRight_DragDelta" Style="{StaticResource InvisibleThumbStyle}"/>
+    </Grid>
+</UserControl>

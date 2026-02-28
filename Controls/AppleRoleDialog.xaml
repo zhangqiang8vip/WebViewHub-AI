@@ -1,0 +1,79 @@
+<Window x:Class="WebViewHub.Controls.AppleRoleDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Role Dialog" Height="180" Width="320"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Window.Resources>
+        <Style x:Key="ActionButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#007AFF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#f0f0f5"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#e5e5ea"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="#fdfdfd" CornerRadius="12" BorderBrush="#e5e5ea" BorderThickness="1" ClipToBounds="True">
+        <Border.Effect>
+            <DropShadowEffect Color="Black" Opacity="0.15" BlurRadius="20" ShadowDepth="5"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="45"/>
+            </Grid.RowDefinitions>
+
+            <!-- 标题内容 -->
+            <StackPanel Grid.Row="0" Margin="20,20,20,0" HorizontalAlignment="Center">
+                <TextBlock Text="配置角色标签" FontSize="16" FontWeight="SemiBold" Foreground="#1c1c1e" TextAlignment="Center"/>
+                <TextBlock Text="仅设置此窗口的内部 AI 身份 (RoleTag)" FontSize="12" Foreground="#8e8e93" TextAlignment="Center" Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <!-- 输入区 -->
+            <StackPanel Grid.Row="1" Margin="20,15,20,15">
+                <TextBox x:Name="RoleTagTextBox" Padding="5,6" 
+                         FontSize="14" Foreground="#1c1c1c" BorderBrush="#d1d1d6" BorderThickness="1"
+                         VerticalContentAlignment="Center" MaxLength="100">
+                    <TextBox.Resources>
+                        <Style TargetType="{x:Type Border}">
+                            <Setter Property="CornerRadius" Value="6" />
+                        </Style>
+                    </TextBox.Resources>
+                </TextBox>
+            </StackPanel>
+
+            <!-- 按钮组 -->
+            <Border Grid.Row="2" BorderBrush="#e5e5ea" BorderThickness="0,1,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="1"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Content="取消" Style="{StaticResource ActionButton}" Foreground="#8e8e93" Click="btnCancel_Click"/>
+                    <Border Grid.Column="1" Background="#e5e5ea"/>
+                    <Button Grid.Column="2" Content="确认" Style="{StaticResource ActionButton}" FontWeight="SemiBold" Click="btnOk_Click"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

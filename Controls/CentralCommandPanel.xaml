@@ -1,0 +1,194 @@
+<UserControl x:Class="WebViewHub.Controls.CentralCommandPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:WebViewHub.Controls"
+             Background="#ffffff">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="2*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="1*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 顶部标题区 -->
+        <Border Grid.Row="0" BorderBrush="#e5e5e7" BorderThickness="0,0,0,1" Padding="15">
+            <StackPanel>
+                <TextBlock Text="AI 中央调度台" FontSize="16" FontWeight="SemiBold" Foreground="#1d1d1f"/>
+                <TextBlock Text="提取回复 / 分发指令 (@角色)" FontSize="12" Foreground="#86868b" Margin="0,4,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 上半部分：中转信息看板区域 -->
+        <Border Grid.Row="1" Background="#fdfdfd" Padding="12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- 标题行 + 清空按钮 -->
+                <Grid Grid.Row="0" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="各 AI 最新回复" FontSize="12" FontWeight="SemiBold" Foreground="#86868b" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" x:Name="ClearResponsesButton" Content="清空" Click="ClearResponsesButton_Click"
+                            Padding="8,3" FontSize="11" Foreground="#86868b" Background="Transparent"
+                            BorderBrush="#e5e5e7" BorderThickness="1" Cursor="Hand">
+                        <Button.Resources>
+                            <Style TargetType="{x:Type Border}">
+                                <Setter Property="CornerRadius" Value="4"/>
+                            </Style>
+                        </Button.Resources>
+                    </Button>
+                </Grid>
+
+                <!-- 多卡片回复展示区 -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="ResponseBoard">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,0,0,8" CornerRadius="8"
+                                        Background="#ffffff"
+                                        BorderBrush="#e5e5e7" BorderThickness="1">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="#000000" Opacity="0.04" BlurRadius="6" ShadowDepth="1"/>
+                                    </Border.Effect>
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <!-- 角色标签栏 -->
+                                        <Border Grid.Row="0" Background="#f0f7ff" CornerRadius="8,8,0,0" Padding="10,6">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="●" Foreground="#0284c7" FontSize="9" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <TextBlock Text="{Binding Role}" FontSize="12" FontWeight="SemiBold" Foreground="#0284c7" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Time}" FontSize="10" Foreground="#94a3b8" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <!-- 回复内容 -->
+                                        <TextBox Grid.Row="1"
+                                                 Text="{Binding Content, Mode=OneWay}"
+                                                 TextWrapping="Wrap"
+                                                 IsReadOnly="True"
+                                                 BorderThickness="0"
+                                                 Background="Transparent"
+                                                 FontSize="13"
+                                                 Foreground="#1c1c1c"
+                                                 Padding="10,8"
+                                                 VerticalScrollBarVisibility="Disabled"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- 抓取按钮 -->
+                <Button Grid.Row="2" x:Name="FetchButton" Content="⬇ 抓取所有 AI 的最新回答"
+                        Margin="0,8,0,0" Padding="10,8"
+                        Background="#f0f7ff" Foreground="#0284c7"
+                        BorderBrush="#bae0ff" BorderThickness="1"
+                        FontWeight="SemiBold"
+                        Cursor="Hand" Click="FetchButton_Click">
+                    <Button.Resources>
+                        <Style TargetType="{x:Type Border}">
+                            <Setter Property="CornerRadius" Value="6"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+            </Grid>
+        </Border>
+
+
+        <!-- 分界线 -->
+        <Border Grid.Row="2" Height="1" Background="#e5e5e7"/>
+
+        <!-- 下半部分：提问与发号施令区 -->
+        <Border Grid.Row="3" Background="#ffffff" Padding="12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <TextBlock Grid.Row="0" Text="调度指令 (如: @豆包 帮我写...)" FontSize="12" Foreground="#86868b" Margin="0,0,0,8"/>
+                
+                <!-- 发送输入区 -->
+                <Border Grid.Row="1" BorderBrush="#d1d1d6" BorderThickness="1" CornerRadius="6">
+                    <RichTextBox x:Name="CommandInput" 
+                                     VerticalScrollBarVisibility="Auto"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     FontSize="14"
+                                     Padding="10,12"
+                                     Foreground="#333333"
+                                     TextChanged="CommandInput_TextChanged"
+                                     PreviewKeyDown="CommandInput_PreviewKeyDown">
+                            <FlowDocument>
+                                <Paragraph Margin="0"></Paragraph>
+                            </FlowDocument>
+                        </RichTextBox>
+                </Border>
+                
+                <!-- @符号下拉菜单容器 -->
+                <Popup x:Name="RoleTagPopup" PlacementTarget="{Binding ElementName=CommandInput}" Placement="Top" StaysOpen="False" AllowsTransparency="True">
+                    <Border Background="#ffffff" BorderBrush="#e5e5e7" BorderThickness="1" CornerRadius="6" Margin="0,0,0,4" Effect="{DynamicResource DropShadowEffect}">
+                        <Border.Resources>
+                            <DropShadowEffect x:Key="DropShadowEffect" Color="#000000" Opacity="0.1" BlurRadius="10" ShadowDepth="2"/>
+                        </Border.Resources>
+                        <ListBox x:Name="RoleTagListBox" Background="Transparent" BorderThickness="0" 
+                                 MaxHeight="150" MinWidth="150" Margin="4"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 SelectionMode="Single"
+                                 PreviewMouseLeftButtonUp="RoleTagListBox_PreviewMouseLeftButtonUp">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="8,6"/>
+                                    <Setter Property="Cursor" Value="Hand"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <Border Name="Border" Padding="{TemplateBinding Padding}" CornerRadius="4" Background="Transparent">
+                                                    <ContentPresenter />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Border" Property="Background" Value="#f5f5f7"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter TargetName="Border" Property="Background" Value="#e8e8ed"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                        </ListBox>
+                    </Border>
+                </Popup>
+                
+                <!-- 发送按钮 -->
+                <Button Grid.Row="2" x:Name="SendButton" Content="🚀 分发执行" 
+                        Margin="0,10,0,0" Padding="10,12"
+                        Background="#007AFF" Foreground="#ffffff" 
+                        BorderThickness="0" FontWeight="SemiBold"
+                        Cursor="Hand" Click="SendButton_Click">
+                    <Button.Resources>
+                        <Style TargetType="{x:Type Border}">
+                            <Setter Property="CornerRadius" Value="6"/>
+                        </Style>
+                    </Button.Resources>
+                </Button>
+            </Grid>
+        </Border>
+
+    </Grid>
+</UserControl>

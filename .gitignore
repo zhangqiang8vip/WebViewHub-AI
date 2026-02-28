@@ -1,0 +1,48 @@
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+publish/
+installer/
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# IDE / VS
+.idea/
+.vs/
+*.swp
+*.*~
+project.lock.json
+.DS_Store
+
+# Publish and Deploy
+*.publishsettings
+app.publish/
+
+# MSBuild / Dotnet
+*.userprefs
+*.DS_Store
+*.App.config
+
+# Custom Excludes for this project
+WebViewHub.db
+WebViewHub.db-shm
+WebViewHub.db-wal
+*.exe
+/Profiles/
