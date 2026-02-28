@@ -49,32 +49,7 @@ namespace WebViewHub
             LoadLayout();
             UpdateCountText();
 
-            // 埋入临时调试探针：获取真实的 DOM 用于解决大模型站点的兼容性适配
-            Task.Run(async () => 
-            {
-                await Task.Delay(5000); // 留出 5 秒等待页面渲染和网络加载加载
-                Dispatcher.Invoke(async () => 
-                {
-                    foreach (var view in _webViews) 
-                    {
-                        try 
-                        {
-                            var cw2 = view.WebView.GetCoreWebView2();
-                            if (cw2 != null && !string.IsNullOrEmpty(view.RoleTag))
-                            {
-                                string html = await cw2.ExecuteScriptAsync("document.body.innerHTML");
-                                if (html != null && html != "null")
-                                {
-                                    try { html = System.Text.Json.JsonSerializer.Deserialize<string>(html) ?? html; } catch {}
-                                    string path = $@"e:\ProjectMy\WebViewHub\debug_dump_{view.RoleTag}.html";
-                                    System.IO.File.WriteAllText(path, html);
-                                }
-                            }
-                        } 
-                        catch { /* 忽略异常 */ }
-                    }
-                });
-            });
+
         }
 
         private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
