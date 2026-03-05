@@ -9,8 +9,8 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <AssemblyTitle>WebViewHub</AssemblyTitle>
     <AssemblyDescription>AI Agent Collaboration Hub</AssemblyDescription>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
     <Company>WebViewHub</Company>
   </PropertyGroup>
 
