@@ -24,11 +24,11 @@ Your support is the greatest motivation for me to continue updating and optimizi
 <table align="center">
   <tr>
     <td align="center">
-      <img src="Assets/alipay.jpg" width="200" /><br />
+      <img src="Assets/wechat_pay.jpg" width="200" /><br />
       <b>WeChat Pay</b>
     </td>
     <td align="center">
-      <img src="Assets/wechat_pay.jpg" width="200" /><br />
+      <img src="Assets/alipay.jpg" width="200" /><br />
       <b>Alipay</b>
     </td>
   </tr>
