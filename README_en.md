@@ -6,6 +6,36 @@ WebViewHub is an elegant, multi-window AI agent aggregation workspace built with
 
 ![WebViewHub](app.ico) <!-- Replace with actual screenshot path -->
 
+---
+
+## 💖 Sponsors & Partners
+
+Special thanks to the following individuals or organizations for their generous support:
+
+> **[Your spot here – waiting for you!]**
+> If you are an organization or company and wish to display your logo or advertisement link here, please feel free to contact the author.
+
+### ☕ Support & Donation
+
+**Development is not easy. If you find WebViewHub helpful, feel free to buy the author a coffee! ☕**
+
+Your support is the greatest motivation for me to continue updating and optimizing this tool. Every donation will be used to cover server costs, improve software quality, and support the development of subsequent new features.
+
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="Assets/wechat_pay.jpg" width="200" /><br />
+      <b>WeChat Pay</b>
+    </td>
+    <td align="center">
+      <img src="Assets/alipay.jpg" width="200" /><br />
+      <b>Alipay</b>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## 🎯 Project Goal
 
 People have long suffered from endlessly switching tabs between various AI web pages! This project aims to create extremely smooth multi-modal AI synergy via an ultimate geek desktop tool. Instead of calling expensive official APIs, it directly drives the native web UI of the various AI providers, enabling seamless multi-instance windows on the same screen. Through underlying DOM injection and automated operations, it breaks the barriers between major models, offering synchronized prompt broadcasting and cross-model generation cascades, significantly boosting AI usage efficiency and experience.
@@ -85,6 +115,18 @@ WebViewHub-AI/
 │   └── AppStyles.xaml              # UI aesthetics definition, color tokens
 └── WebViewHub.csproj               # .NET 8 WPF Project configuration file
 ```
+
+## 💬 Feedback & Communication
+
+If you encounter any issues during use, or have great suggestions and ideas, please feel free to reach out:
+
+- **Email**: [zhangqiang88vip@163.com](mailto:zhangqiang88vip@163.com) (I will respond to your messages as soon as possible)
+- **GitHub Discussions**: Visit [Discussions](https://github.com/zhangqiang8vip/WebViewHub-AI/discussions) to join the conversation or suggest new features.
+- **Bug Reports**: If you find a specific bug, please submit it via [Issues](https://github.com/zhangqiang8vip/WebViewHub-AI/issues).
+
+Every piece of feedback is invaluable to this project!
+
+---
 
 ## 📄 License
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -9,8 +10,11 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Runtime.InteropServices;
+using Microsoft.Web.WebView2.Core;
 using WebViewHub.Controls;
 using WebViewHub.Services;
+using System.Windows.Forms;
 
 namespace WebViewHub
 {
@@ -22,10 +26,38 @@ namespace WebViewHub
         private int _counter = 0;
         private int _currentZIndex = 1;
 
+        // 独立浮动窗口实例 (新 Window 方案)
+        private FloatingIslandWindow? _floatingIslandWindow;
+
+        // 系统托盘
+        private NotifyIcon? _notifyIcon;
+        private bool _isExiting = false;
+
+        // 全局快捷键
+        private const int HOTKEY_ID_SHOW_FLOATING = 1;
+        private const int HOTKEY_ID_SHOW_CHAT = 2;
+        private const int MOD_NONE = 0;
+        private const int MOD_CTRL = 2;
+        private const int WM_HOTKEY = 0x0312;
+
+        [DllImport("user32.dll")]
+        private static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
+        [DllImport("user32.dll")]
+        private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+        // 配置路径
+        private static string ConfigPath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "WebViewHub", "settings.txt");
+        private int _hotkeyShowFloating = (int)Keys.F10; // 默认 F10 显示/隐藏悬浮框
+        private int _hotkeyShowChat = (int)Keys.F9;      // 默认 F9 展开/收起聊天窗口
+
+        private bool _isPrayModeEnabled = true;
+
         private const int MaxWebViews = 10;
         private const double DefaultWidth = 600;
         private const double DefaultHeight = 400;
-        private const double DefaultMargin = 0; // 自动排版零缝隙
+        private const double DefaultMargin = 6; // 自动排版边距(12px缝隙)
         private const int SnapThreshold = 20; // 磁吸阈值 20 像素
         private const int GridSize = 10; // 网格大小
 
@@ -41,19 +73,368 @@ namespace WebViewHub
             _saveTimer.Tick += (s, e) => SaveLayout();
 
             Loaded += MainWindow_Loaded;
+            Closing += Window_Closing;
+
+            // 初始化系统托盘
+            InitNotifyIcon();
+
+            // 加载快捷键配置
+            LoadHotkeyConfig();
+        }
+
+        // 初始化系统托盘图标
+        private ContextMenu? _contextMenu;
+        
+        private void InitNotifyIcon()
+        {
+            // 创建 WPF ContextMenu (Win11 风格)
+            _contextMenu = new ContextMenu();
+            _contextMenu.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(32, 32, 32));
+            _contextMenu.Foreground = System.Windows.Media.Brushes.White;
+            _contextMenu.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60));
+            _contextMenu.BorderThickness = new Thickness(1);
+            _contextMenu.Padding = new Thickness(4);
+            
+            // 创建菜单项辅助方法
+            MenuItem CreateMenuItem(string header, RoutedEventHandler handler)
+            {
+                var item = new MenuItem 
+                { 
+                    Header = header,
+                    FontSize = 13,
+                    FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
+                    Foreground = System.Windows.Media.Brushes.White,
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    Padding = new Thickness(12, 8, 12, 8),
+                    BorderThickness = new Thickness(0)
+                };
+                item.Click += handler;
+                item.MouseEnter += (s, e) => { if (s is MenuItem mi) mi.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60)); };
+                item.MouseLeave += (s, e) => { if (s is MenuItem mi) mi.Background = System.Windows.Media.Brushes.Transparent; };
+                return item;
+            }
+            
+            // 菜单项
+            _contextMenu.Items.Add(CreateMenuItem("显示主窗口", (s, e) => ShowMainWindow()));
+            _contextMenu.Items.Add(CreateMenuItem("显示/隐藏悬浮框", (s, e) => ToggleFloatingWindow()));
+            
+            // Dock 开关（带勾选标记）
+            var dockMenuItem = new MenuItem 
+            { 
+                Header = "启用吸附",
+                FontSize = 13,
+                FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
+                Foreground = System.Windows.Media.Brushes.White,
+                Background = System.Windows.Media.Brushes.Transparent,
+                Padding = new Thickness(12, 8, 12, 8),
+                BorderThickness = new Thickness(0),
+                IsCheckable = true,
+                IsChecked = _floatingIslandWindow?.EnableDock ?? true
+            };
+            dockMenuItem.Click += (s, e) => 
+            {
+                bool newValue = !dockMenuItem.IsChecked;
+                dockMenuItem.IsChecked = newValue;
+                _floatingIslandWindow.EnableDock = newValue;
+            };
+            _contextMenu.Items.Add(dockMenuItem);
+            
+            _contextMenu.Items.Add(CreateMenuItem("贴顶部", (s, e) => SnapFloatingToTop()));
+            _contextMenu.Items.Add(CreateMenuItem("贴主窗口", (s, e) => SnapFloatingToMainWindow()));
+            
+            // 分隔线
+            var sep1 = new Separator { Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60)), Margin = new Thickness(8, 4, 8, 4) };
+            _contextMenu.Items.Add(sep1);
+            
+            _contextMenu.Items.Add(CreateMenuItem("设置快捷键", (s, e) => ShowHotkeySettings()));
+            
+            var sep2 = new Separator { Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60)), Margin = new Thickness(8, 4, 8, 4) };
+            _contextMenu.Items.Add(sep2);
+            
+            _contextMenu.Items.Add(CreateMenuItem("退出", (s, e) => ExitApplication()));
+            
+            _notifyIcon = new NotifyIcon
+            {
+                Text = "WebViewHub",
+                Visible = true,
+                ContextMenuStrip = null
+            };
+            
+            // 拦截右键点击显示 WPF ContextMenu
+            _notifyIcon.MouseDown += (s, e) => 
+            {
+                if (e.Button == MouseButtons.Right && _contextMenu != null)
+                {
+                    _contextMenu.PlacementTarget = null;
+                    _contextMenu.IsOpen = true;
+                }
+            };
+            
+            // 加载应用图标作为托盘图标
+            try {
+                string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
+                if (File.Exists(iconPath))
+                    _notifyIcon.Icon = new System.Drawing.Icon(iconPath);
+            } catch { }
+            
+            _notifyIcon.DoubleClick += (s, e) => ShowMainWindow();
+        }
+
+        private void ShowHotkeySettings()
+        {
+            // 简单的输入对话框
+            var dialog = new System.Windows.Window
+            {
+                Title = "设置快捷键",
+                Width = 400,
+                Height = 250,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                ResizeMode = ResizeMode.NoResize
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(20) };
+
+            var label1 = new TextBlock 
+            { 
+                Text = "显示/隐藏悬浮框快捷键（F10）：", 
+                Margin = new Thickness(0, 0, 0, 5),
+                FontSize = 14
+            };
+            var input1 = new System.Windows.Controls.TextBox 
+            { 
+                Text = ((Keys)_hotkeyShowFloating).ToString(),
+                FontSize = 14,
+                Padding = new Thickness(5),
+                Margin = new Thickness(0, 0, 0, 20)
+            };
+
+            var label2 = new TextBlock 
+            { 
+                Text = "展开/收起聊天窗口快捷键（F9）：", 
+                Margin = new Thickness(0, 0, 0, 5),
+                FontSize = 14
+            };
+            var input2 = new System.Windows.Controls.TextBox 
+            { 
+                Text = ((Keys)_hotkeyShowChat).ToString(),
+                FontSize = 14,
+                Padding = new Thickness(5),
+                Margin = new Thickness(0, 0, 0, 20)
+            };
+
+            var hint = new TextBlock
+            {
+                Text = "提示：输入如 F9, F10, Ctrl+Shift+A 等\n修改后重启生效",
+                Foreground = System.Windows.Media.Brushes.Gray,
+                Margin = new Thickness(0, 0, 0, 10),
+                FontSize = 11
+            };
+
+            var btnPanel = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+            var okBtn = new System.Windows.Controls.Button { Content = "保存", Width = 80, Margin = new Thickness(0, 0, 10, 0) };
+            var cancelBtn = new System.Windows.Controls.Button { Content = "取消", Width = 80 };
+
+            okBtn.Click += (s, e) =>
+            {
+                if (Enum.TryParse<Keys>(input1.Text, true, out var k1))
+                    _hotkeyShowFloating = (int)k1;
+                if (Enum.TryParse<Keys>(input2.Text, true, out var k2))
+                    _hotkeyShowChat = (int)k2;
+                SaveHotkeyConfig();
+                dialog.DialogResult = true;
+                dialog.Close();
+            };
+            cancelBtn.Click += (s, e) => { dialog.DialogResult = false; dialog.Close(); };
+
+            btnPanel.Children.Add(okBtn);
+            btnPanel.Children.Add(cancelBtn);
+
+            panel.Children.Add(label1);
+            panel.Children.Add(input1);
+            panel.Children.Add(label2);
+            panel.Children.Add(input2);
+            panel.Children.Add(hint);
+            panel.Children.Add(btnPanel);
+
+            dialog.Content = panel;
+            dialog.ShowDialog();
+        }
+
+        private void ShowMainWindow()
+        {
+            Show();
+            WindowState = WindowState.Normal;
+            Activate();
+        }
+
+        private void ToggleFloatingWindow()
+        {
+            AppLogger.Debug("[MainWindow] ToggleFloatingWindow() called");
+            _floatingIslandWindow?.Toggle();
+        }
+
+        private void SnapFloatingToTop()
+        {
+            _floatingIslandWindow?.SnapToTop();
+        }
+
+        private void SnapFloatingToMainWindow()
+        {
+            _floatingIslandWindow?.SnapToMainWindow(this);
+        }
+
+        private void ExitApplication()
+        {
+            _isExiting = true;
+            _notifyIcon?.Dispose();
+            System.Windows.Application.Current.Shutdown();
+        }
+
+        // 加载快捷键配置
+        private void LoadHotkeyConfig()
+        {
+            try
+            {
+                if (File.Exists(ConfigPath))
+                {
+                    var lines = File.ReadAllLines(ConfigPath);
+                    if (lines.Length >= 2)
+                    {
+                        if (Enum.TryParse<Keys>(lines[0], true, out var key1))
+                            _hotkeyShowFloating = (int)key1;
+                        if (Enum.TryParse<Keys>(lines[1], true, out var key2))
+                            _hotkeyShowChat = (int)key2;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // 保存快捷键配置
+        private void SaveHotkeyConfig()
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(ConfigPath);
+                if (!Directory.Exists(dir))
+                    Directory.CreateDirectory(dir!);
+                File.WriteAllLines(ConfigPath, new[] {
+                    ((Keys)_hotkeyShowFloating).ToString(),
+                    ((Keys)_hotkeyShowChat).ToString()
+                });
+            }
+            catch { }
+        }
+
+        // 注册全局快捷键
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+
+            var helper = new System.Windows.Interop.WindowInteropHelper(this);
+            var source = System.Windows.Interop.HwndSource.FromHwnd(helper.Handle);
+            source?.AddHook(HwndHook);
+
+            // 注册快捷键
+            RegisterHotKey(helper.Handle, HOTKEY_ID_SHOW_FLOATING, MOD_NONE, _hotkeyShowFloating);
+            RegisterHotKey(helper.Handle, HOTKEY_ID_SHOW_CHAT, MOD_NONE, _hotkeyShowChat);
+        }
+
+        private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == WM_HOTKEY)
+            {
+                int hotkeyId = wParam.ToInt32();
+                AppLogger.Debug($"[MainWindow] HwndHook - Hotkey received: ID={hotkeyId}");
+                if (hotkeyId == HOTKEY_ID_SHOW_FLOATING)
+                {
+                    // 显示/切换悬浮框
+                    AppLogger.Debug("[MainWindow] HwndHook - Triggering ToggleFloatingWindow()");
+                    ToggleFloatingWindow();
+                    handled = true;
+                }
+                else if (hotkeyId == HOTKEY_ID_SHOW_CHAT)
+                {
+                    // F9 展开/收起聊天窗口（切换聊天面板）
+                    AppLogger.Debug("[MainWindow] HwndHook - Triggering ToggleChatPanel()");
+                    if (_floatingIslandWindow != null)
+                    {
+                        _floatingIslandWindow.Show();
+                        _floatingIslandWindow.ToggleChatPanel();
+                    }
+                    else
+                    {
+                        AppLogger.Warning("[MainWindow] HwndHook - _floatingIslandWindow is null!");
+                    }
+                    handled = true;
+                }
+            }
+            return IntPtr.Zero;
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            var helper = new System.Windows.Interop.WindowInteropHelper(this);
+            UnregisterHotKey(helper.Handle, HOTKEY_ID_SHOW_FLOATING);
+            UnregisterHotKey(helper.Handle, HOTKEY_ID_SHOW_CHAT);
+            _notifyIcon?.Dispose();
+            base.OnClosed(e);
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            CommandPanel.MainWindowReference = this;
             LoadLayout();
             UpdateCountText();
 
+            // 启动独立 FloatingIslandWindow 窗口
+            StartFloatingIslandWindow();
+        }
 
+        /// <summary>
+        /// 启动独立的灵动岛悬浮窗口 (新 Window 方案 - 解决 Popup 事件丢失问题)
+        /// Popup 没有独立窗口句柄，无法正确接收所有系统事件，
+        /// 且无法真正置顶到其他应用程序之上。
+        /// 使用独立的 WPF Window 可以解决这些问题。
+        /// </summary>
+        private void StartFloatingIslandWindow()
+        {
+            AppLogger.Debug("[MainWindow] StartFloatingIslandWindow() - Initializing...");
+            _floatingIslandWindow = new FloatingIslandWindow
+            {
+                MainWindowReference = this,
+                EnableDock = true  // 启用 Dock 功能
+            };
+
+            // 设置初始位置：屏幕右下角
+            var workArea = SystemParameters.WorkArea;
+            _floatingIslandWindow.Left = workArea.Width - 80;
+            _floatingIslandWindow.Top = workArea.Height - 80;
+
+            // 预加载：先显示窗口让WPF完成布局，然后隐藏
+            // 这样第一次展开时就不会卡了
+            AppLogger.Debug("[MainWindow] StartFloatingIslandWindow - Pre-loading window");
+            _floatingIslandWindow.Show();
+            _floatingIslandWindow.PreLoad();  // 预渲染所有控件
+            _floatingIslandWindow.Hide();
+            
+            // 再次显示（图标模式）
+            _floatingIslandWindow.Show();
+            AppLogger.Debug($"[MainWindow] StartFloatingIslandWindow - Window ready at ({_floatingIslandWindow.Left}, {_floatingIslandWindow.Top})");
         }
 
         private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
         {
+            // 如果不是退出程序，则最小化到托盘
+            if (!_isExiting)
+            {
+                e.Cancel = true;
+                Hide();
+                return;
+            }
+
+            // 关闭时一并关闭浮动窗口
+            _floatingIslandWindow?.Close();
+
             SaveLayout();
             foreach (var container in _webViews)
             {
@@ -64,6 +445,12 @@ namespace WebViewHub
         #region WebView 管理
 
         public IReadOnlyList<WebViewContainer> GetAllWebViews() => _webViews;
+        
+        // 供容器提升层级用的全局 Z 轴计数器
+        public int GetNextZIndex()
+        {
+            return ++_currentZIndex;
+        }
 
         private void AddWebView_Click(object sender, RoutedEventArgs e)
         {
@@ -81,6 +468,11 @@ namespace WebViewHub
             
             var container = CreateWebViewContainer(profileId, "https://www.baidu.com", string.Empty, false, x, y, DefaultWidth, DefaultHeight, 1.0);
             AddWebViewToCanvas(container);
+            
+            Dispatcher.InvokeAsync(() => {
+                int cols = (int)Math.Ceiling(Math.Sqrt(_webViews.Count));
+                ApplyGridLayout(Math.Max(2, cols), Math.Max(2, cols));
+            });
         }
 
         private (double x, double y) CalculateDefaultPosition(int index)
@@ -148,6 +540,14 @@ namespace WebViewHub
             _webViews.Remove(container);
             container.Cleanup();
             UpdateCountText();
+            
+            Dispatcher.InvokeAsync(() => {
+                if (_webViews.Count > 0)
+                {
+                    int cols = (int)Math.Ceiling(Math.Sqrt(_webViews.Count));
+                    ApplyGridLayout(Math.Max(2, cols), Math.Max(2, cols));
+                }
+            });
         }
 
         private void OnWebViewDeleteRequested(object? sender, WebViewContainer e)
@@ -406,13 +806,31 @@ namespace WebViewHub
             LayoutCanvas.Children.Clear();
             _webViews.Clear();
 
+            int maxId = 0;
+
             foreach (var item in layout)
             {
                 var container = CreateWebViewContainer(item.ProfileID, item.Url, item.RoleTag, item.IsMobileMode, item.X, item.Y, item.Width, item.Height, item.ZoomFactor);
                 AddWebViewToCanvas(container);
+
+                if (!string.IsNullOrEmpty(item.ProfileID) && item.ProfileID.StartsWith("Profile_"))
+                {
+                    if (int.TryParse(item.ProfileID.Substring(8), out int id))
+                    {
+                        if (id > maxId) maxId = id;
+                    }
+                }
             }
 
-            _counter = layout.Count;
+            _counter = maxId;
+
+            Dispatcher.InvokeAsync(() => {
+                if (_webViews.Count > 0)
+                {
+                    int cols = (int)Math.Ceiling(Math.Sqrt(_webViews.Count));
+                    ApplyGridLayout(Math.Max(2, cols), Math.Max(2, cols));
+                }
+            }, DispatcherPriority.Loaded);
         }
 
         #endregion
@@ -422,6 +840,134 @@ namespace WebViewHub
         private void UpdateCountText()
         {
             CountText.Text = $"{_webViews.Count}/{MaxWebViews}";
+        }
+
+        private void PrayModeToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (PrayModeToggle.IsChecked == true)
+            {
+                _isPrayModeEnabled = true;
+                PrayModeToggle.Content = "小神仙保佑";
+            }
+            else
+            {
+                _isPrayModeEnabled = false;
+                PrayModeToggle.Content = "停止保佑";
+                
+                // 停止时立即收回所有现存的神仙
+                foreach (var container in _webViews)
+                {
+                    var coreWebView = container.WebView.GetCoreWebView2();
+                    _ = HidePrayingAnimationForWebView(coreWebView);
+                }
+            }
+        }
+
+        public async Task ShowPrayingAnimationForWebView(CoreWebView2? coreWebView)
+        {
+            if (!_isPrayModeEnabled || coreWebView == null) return;
+            string base64Image = GetPrayingImageBase64();
+            if (string.IsNullOrEmpty(base64Image)) return;
+
+            string script = $@"
+                (function() {{
+                    let styleId = 'my-praying-pet-style';
+                    if (!document.getElementById(styleId)) {{
+                        let style = document.createElement('style');
+                        style.id = styleId;
+                        style.innerHTML = `
+                            @keyframes petFloat {{
+                                0% {{ transform: translate(-50%, -50%) scale(1); }}
+                                50% {{ transform: translate(-50%, calc(-50% - 15px)) scale(1); }}
+                                100% {{ transform: translate(-50%, -50%) scale(1); }}
+                            }}
+                        `;
+                        document.head.appendChild(style);
+                    }}
+
+                    let pet = document.getElementById('my-praying-pet');
+                    if (!pet) {{
+                        pet = document.createElement('img');
+                        pet.id = 'my-praying-pet';
+                        pet.src = '{base64Image}';
+                        pet.style.position = 'fixed';
+                        pet.style.top = '50%';
+                        pet.style.left = '50%';
+                        pet.style.transform = 'translate(-50%, -50%) scale(0.5)';
+                        pet.style.width = '160px';
+                        pet.style.height = '160px';
+                        pet.style.zIndex = '2147483647';
+                        pet.style.cursor = 'pointer';
+                        pet.style.transition = 'opacity 0.3s, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                        pet.style.opacity = '0';
+                        pet.style.filter = 'drop-shadow(0px 10px 15px rgba(0,0,0,0.15))';
+                        
+                        pet.onclick = function() {{
+                            this.style.animation = 'none';
+                            void this.offsetWidth;
+                            this.style.opacity = '0';
+                            this.style.pointerEvents = 'none';
+                            this.style.transform = 'translate(-50%, -50%) scale(0.5)';
+                            setTimeout(() => {{ if (this.parentNode) this.parentNode.removeChild(this); }}, 400);
+                        }};
+                        
+                        document.body.appendChild(pet);
+                    }}
+                    
+                    pet.style.pointerEvents = 'auto'; 
+                    setTimeout(() => {{
+                        pet.style.opacity = '1';
+                        pet.style.transform = 'translate(-50%, -50%) scale(1)';
+                        setTimeout(() => {{
+                            if (pet.style.opacity === '1') {{
+                                pet.style.animation = 'petFloat 3s ease-in-out infinite';
+                            }}
+                        }}, 400);
+                    }}, 50);
+                }})();
+            ";
+
+            try { await coreWebView.ExecuteScriptAsync(script); } catch { }
+        }
+
+        public async Task HidePrayingAnimationForWebView(CoreWebView2? coreWebView)
+        {
+            if (coreWebView == null) return;
+            string script = $@"
+                (function() {{
+                    let pet = document.getElementById('my-praying-pet');
+                    if (pet) {{
+                        pet.style.animation = 'none';
+                        void pet.offsetWidth;
+                        pet.style.opacity = '0';
+                        pet.style.transform = 'translate(-50%, -50%) scale(0.5)';
+                        pet.style.pointerEvents = 'none';
+                        setTimeout(() => {{ if (pet.parentNode) pet.parentNode.removeChild(pet); }}, 400);
+                    }}
+                }})();
+            ";
+            try { await coreWebView.ExecuteScriptAsync(script); } catch { }
+        }
+
+        private string _prayingImageBase64 = string.Empty;
+        private string GetPrayingImageBase64()
+        {
+            if (!string.IsNullOrEmpty(_prayingImageBase64)) return _prayingImageBase64;
+            
+            try
+            {
+                var uri = new Uri("pack://application:,,,/Assets/praying_character.png");
+                var streamInfo = System.Windows.Application.GetResourceStream(uri);
+                if (streamInfo != null)
+                {
+                    using var memoryStream = new System.IO.MemoryStream();
+                    streamInfo.Stream.CopyTo(memoryStream);
+                    _prayingImageBase64 = "data:image/png;base64," + Convert.ToBase64String(memoryStream.ToArray());
+                }
+            }
+            catch { }
+
+            return _prayingImageBase64;
         }
 
         #endregion
@@ -440,75 +986,75 @@ namespace WebViewHub
 
         private void ApplyLayoutSplitVertical_Click(object sender, RoutedEventArgs e)
         {
-            // 左右各半，中间留调度台位置
-            ApplyBilateralLayout();
+            ApplyGridLayout(2, 1);
         }
 
         private void ApplyLayoutSplitHorizontal_Click(object sender, RoutedEventArgs e)
         {
-            // 上下分栏（全画布）
-            var count = _webViews.Count;
-            if (count == 0) return;
-            var h = LayoutCanvas.ActualHeight - DefaultMargin * 2;
-            var w = LayoutCanvas.ActualWidth - DefaultMargin * 2;
-            var itemH = h / count;
-            for (int i = 0; i < count; i++)
-                AnimateToPosition(_webViews[i], DefaultMargin, DefaultMargin + itemH * i,
-                                  w - DefaultMargin, itemH - DefaultMargin);
+            ApplyGridLayout(1, 2);
         }
 
         private void ApplyLayoutWaterfall_Click(object sender, RoutedEventArgs e)
         {
-            ApplyBilateralLayout();
+            var count = _webViews.Count;
+            if (count == 0) return;
+
+            var totalW = LayoutCanvas.ActualWidth;
+            var totalH = LayoutCanvas.ActualHeight;
+            double gutter = 12.0;
+
+            double w = totalW - gutter * 2;
+            double h = (totalH - gutter * (count + 1)) / count;
+
+            for (int i = 0; i < count; i++)
+            {
+                double x = gutter;
+                double y = gutter + i * (h + gutter);
+                AnimateToPosition(_webViews[i], x, y, w, h);
+            }
         }
 
         /// <summary>
-        /// 核心布局：将 WebView 均匀分配到中央调度台两侧
+        /// 核心网格满屏布局：重新构建以绝对缝隙边界无死角平铺，彻底排除宽度侧漏和相互覆盖
         /// </summary>
-        private void ApplyBilateralLayout()
+        private void ApplyGridLayout(int targetCols, int targetRows)
         {
             var count = _webViews.Count;
             if (count == 0) return;
 
-            const double panelWidth = 460; // 调度台宽度 (440) + 安全间距
-            var totalW  = LayoutCanvas.ActualWidth;
-            var totalH  = LayoutCanvas.ActualHeight;
-            var m       = DefaultMargin;
+            var totalW = LayoutCanvas.ActualWidth;
+            var totalH = LayoutCanvas.ActualHeight;
+            double gutter = 12.0;
 
-            // 中央调度台水平区域
-            var panelLeft  = (totalW - panelWidth) / 2;
-            var panelRight = panelLeft + panelWidth;
+            int cols = Math.Min(targetCols, count);
+            int rows = (int)Math.Ceiling((double)count / cols);
 
-            // 左右可用宽度
-            var leftW  = panelLeft  - m * 2;
-            var rightW = totalW - panelRight - m * 2;
-            var itemH  = totalH - m * 2;
+            // 精确计算扣除全部外围缝隙和内部缝隙之后每个块体的基准宽高
+            double cellW = (totalW - gutter * (cols + 1)) / cols;
+            double cellH = (totalH - gutter * (rows + 1)) / rows;
 
-            // 把窗口分成左右两组
-            int leftCount  = count / 2;
-            int rightCount = count - leftCount;
-
-            // 左侧（前 leftCount 个）
-            for (int i = 0; i < leftCount; i++)
+            for (int i = 0; i < count; i++)
             {
-                double w = leftCount > 0 ? (leftW / leftCount) - m : leftW;
-                double x = m + w * i + m * i;
-                AnimateToPosition(_webViews[i], x, m, w, itemH - m);
-            }
+                int r = i / cols;
+                int c = i % cols;
+                
+                double w = cellW;
+                // 对于最后一行没满的情况，把本行其余未分配的空间平分扩展（可选）
+                if (r == rows - 1) 
+                {
+                    int itemsInLastRow = count - (r * cols);
+                    if (itemsInLastRow > 0 && itemsInLastRow < cols)
+                    {
+                        w = (totalW - gutter * (itemsInLastRow + 1)) / itemsInLastRow;
+                        c = i - (r * cols);
+                    }
+                }
 
-            // 右侧（后 rightCount 个）
-            for (int i = 0; i < rightCount; i++)
-            {
-                double w = rightCount > 0 ? (rightW / rightCount) - m : rightW;
-                double x = panelRight + m + (w + m) * i;
-                AnimateToPosition(_webViews[leftCount + i], x, m, w, itemH - m);
-            }
-        }
+                double x = gutter + c * (w + gutter);
+                double y = gutter + r * (cellH + gutter);
 
-        private void ApplyGridLayout(int cols, int rows)
-        {
-            // 网格布局也采用双侧模式，忽略 cols/rows，自动计算
-            ApplyBilateralLayout();
+                AnimateToPosition(_webViews[i], x, y, w, cellH);
+            }
         }
 
         private void AnimateToPosition(WebViewContainer container, double x, double y, double width, double height)
